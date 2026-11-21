@@ -190,6 +190,9 @@ public final class OpenAiCompatibleClient implements LlmClient {
         if (maxTokens != null) {
             body.put("max_tokens", maxTokens);
         }
+        if (req.responseFormat() != null && req.responseFormat().isJson()) {
+            body.put("response_format", buildResponseFormat(req.responseFormat()));
+        }
         body.put("stream", stream);
         if (stream) {
             // 让服务端在最后一片里带上 usage，否则流式下拿不到 token 统计
@@ -200,6 +203,32 @@ public final class OpenAiCompatibleClient implements LlmClient {
         } catch (Exception e) {
             throw new LlmException(LlmException.Kind.BAD_REQUEST, provider, "请求序列化失败", e);
         }
+    }
+
+    /**
+     * 构造 response_format。JSON_SCHEMA 需要把 schema 字符串解析成对象再嵌进去，
+     * 否则会被当成字符串发给服务端，直接 400。
+     */
+    private Object buildResponseFormat(ResponseFormat rf) {
+        if (rf.mode() == ResponseFormat.Mode.JSON_SCHEMA) {
+            JsonNode schema;
+            try {
+                schema = JSON.readTree(rf.jsonSchema());
+            } catch (Exception e) {
+                throw new LlmException(LlmException.Kind.BAD_REQUEST, provider,
+                        "jsonSchema 不是合法的 JSON: " + rf.jsonSchema(), e);
+            }
+            Map<String, Object> inner = new LinkedHashMap<>();
+            inner.put("name", rf.schemaName() == null ? "output" : rf.schemaName());
+            inner.put("schema", schema);
+            inner.put("strict", true);
+
+            Map<String, Object> outer = new LinkedHashMap<>();
+            outer.put("type", "json_schema");
+            outer.put("json_schema", inner);
+            return outer;
+        }
+        return Map.of("type", "json_object");
     }
 
     private LlmException timeoutError(IOException e) {
