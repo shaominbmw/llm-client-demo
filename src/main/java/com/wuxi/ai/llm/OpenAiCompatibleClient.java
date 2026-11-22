@@ -10,6 +10,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -94,7 +95,6 @@ public final class OpenAiCompatibleClient implements LlmClient {
             HttpResponse<Stream<String>> resp = HTTP.send(httpReq,
                     HttpResponse.BodyHandlers.ofLines());
 
-            // 流式下也可能直接返回错误（比如 401/404），此时 body 是一段 JSON 而不是 SSE
             if (resp.statusCode() >= 400) {
                 String errBody = resp.body().collect(Collectors.joining("\n"));
                 throw mapError(resp.statusCode(), errBody);
@@ -103,7 +103,6 @@ public final class OpenAiCompatibleClient implements LlmClient {
             try (Stream<String> lines = resp.body()) {
                 for (String rawLine : (Iterable<String>) lines::iterator) {
                     String line = rawLine.trim();
-                    // SSE 只关心 data: 开头的行；event:/id:/注释行一律跳过
                     if (!line.startsWith("data:")) {
                         continue;
                     }
@@ -131,7 +130,6 @@ public final class OpenAiCompatibleClient implements LlmClient {
                         finishReason = fr;
                     }
 
-                    // 最后一片会带 usage（需要请求里 stream_options.include_usage=true）
                     JsonNode usage = node.path("usage");
                     if (!usage.isMissingNode() && !usage.isNull()) {
                         promptTokens = usage.path("prompt_tokens").asInt(promptTokens);
@@ -174,15 +172,8 @@ public final class OpenAiCompatibleClient implements LlmClient {
     private String toJson(LlmRequest req, String model, boolean stream) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
-        List<Map<String, String>> msgs = req.messages().stream()
-                .map(m -> {
-                    Map<String, String> mm = new LinkedHashMap<>();
-                    mm.put("role", m.role());
-                    mm.put("content", m.content());
-                    return mm;
-                })
-                .toList();
-        body.put("messages", msgs);
+        body.put("messages", buildMessages(req.messages()));
+
         if (req.temperature() != null) {
             body.put("temperature", req.temperature());
         }
@@ -190,14 +181,21 @@ public final class OpenAiCompatibleClient implements LlmClient {
         if (maxTokens != null) {
             body.put("max_tokens", maxTokens);
         }
+
         if (req.responseFormat() != null && req.responseFormat().isJson()) {
             body.put("response_format", buildResponseFormat(req.responseFormat()));
         }
+
+        if (req.hasTools()) {
+            body.put("tools", buildTools(req.tools()));
+            body.put("tool_choice", "auto");
+        }
+
         body.put("stream", stream);
         if (stream) {
-            // 让服务端在最后一片里带上 usage，否则流式下拿不到 token 统计
             body.put("stream_options", Map.of("include_usage", true));
         }
+
         try {
             return JSON.writeValueAsString(body);
         } catch (Exception e) {
@@ -205,10 +203,60 @@ public final class OpenAiCompatibleClient implements LlmClient {
         }
     }
 
-    /**
-     * 构造 response_format。JSON_SCHEMA 需要把 schema 字符串解析成对象再嵌进去，
-     * 否则会被当成字符串发给服务端，直接 400。
-     */
+    private List<Map<String, Object>> buildMessages(List<Msg> messages) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Msg m : messages) {
+            Map<String, Object> mm = new LinkedHashMap<>();
+            mm.put("role", m.role());
+            mm.put("content", m.content() == null ? "" : m.content());
+
+            if (m.hasToolCalls()) {
+                List<Map<String, Object>> calls = new ArrayList<>();
+                for (ToolCall tc : m.toolCalls()) {
+                    Map<String, Object> fn = new LinkedHashMap<>();
+                    fn.put("name", tc.name());
+                    fn.put("arguments", tc.arguments());
+
+                    Map<String, Object> one = new LinkedHashMap<>();
+                    one.put("id", tc.id());
+                    one.put("type", "function");
+                    one.put("function", fn);
+                    calls.add(one);
+                }
+                mm.put("tool_calls", calls);
+            }
+
+            if (m.toolCallId() != null) {
+                mm.put("tool_call_id", m.toolCallId());
+            }
+            out.add(mm);
+        }
+        return out;
+    }
+
+    private List<Map<String, Object>> buildTools(List<ToolDefinition> tools) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (ToolDefinition td : tools) {
+            JsonNode params;
+            try {
+                params = JSON.readTree(td.parametersSchema());
+            } catch (Exception e) {
+                throw new LlmException(LlmException.Kind.BAD_REQUEST, provider,
+                        "工具 " + td.name() + " 的 parametersSchema 不是合法 JSON", e);
+            }
+            Map<String, Object> fn = new LinkedHashMap<>();
+            fn.put("name", td.name());
+            fn.put("description", td.description());
+            fn.put("parameters", params);
+
+            Map<String, Object> one = new LinkedHashMap<>();
+            one.put("type", "function");
+            one.put("function", fn);
+            out.add(one);
+        }
+        return out;
+    }
+
     private Object buildResponseFormat(ResponseFormat rf) {
         if (rf.mode() == ResponseFormat.Mode.JSON_SCHEMA) {
             JsonNode schema;
@@ -243,14 +291,22 @@ public final class OpenAiCompatibleClient implements LlmClient {
             JsonNode message = choice.path("message");
             JsonNode usage = root.path("usage");
 
-            // 推理模型（如 qwen4-max）会把思考过程放在 reasoning_content，
-            // 正文在 content。如果正文为空（思考把 token 用光了），退回到 reasoning_content，
-            // 至少让调用方看到东西，而不是一片空白。
             String text = message.path("content").asText("");
             if (text.isBlank()) {
                 String reasoning = message.path("reasoning_content").asText("");
                 if (!reasoning.isBlank()) {
                     text = "[仅返回思考过程，正文被截断] " + reasoning;
+                }
+            }
+
+            List<ToolCall> calls = new ArrayList<>();
+            JsonNode tcNode = message.path("tool_calls");
+            if (tcNode.isArray()) {
+                for (JsonNode tc : tcNode) {
+                    calls.add(new ToolCall(
+                            tc.path("id").asText(""),
+                            tc.path("function").path("name").asText(""),
+                            tc.path("function").path("arguments").asText("{}")));
                 }
             }
 
@@ -260,7 +316,8 @@ public final class OpenAiCompatibleClient implements LlmClient {
                     text,
                     usage.path("prompt_tokens").asInt(0),
                     usage.path("completion_tokens").asInt(0),
-                    choice.path("finish_reason").asText("")
+                    choice.path("finish_reason").asText(""),
+                    calls
             );
         } catch (Exception e) {
             throw new LlmException(LlmException.Kind.UNKNOWN, provider,
@@ -271,7 +328,6 @@ public final class OpenAiCompatibleClient implements LlmClient {
     private LlmException mapError(int status, String rawBody) {
         String lower = rawBody == null ? "" : rawBody.toLowerCase(Locale.ROOT);
 
-        // 余额/免费额度类问题，各家措辞不同，先按关键字识别
         boolean quotaIssue = lower.contains("quota")
                 || lower.contains("insufficient")
                 || lower.contains("balance")

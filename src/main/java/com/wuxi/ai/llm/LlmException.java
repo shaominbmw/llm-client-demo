@@ -36,6 +36,11 @@ public class LlmException extends RuntimeException {
         this.provider = provider;
     }
 
+    /** 不需要携带 cause 的便捷构造 */
+    public LlmException(Kind kind, String provider, String message) {
+        this(kind, provider, message, null);
+    }
+
     public Kind kind() {
         return kind;
     }
