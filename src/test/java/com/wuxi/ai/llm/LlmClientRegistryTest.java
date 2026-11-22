@@ -191,6 +191,23 @@ class LlmClientRegistryTest {
     }
 
     @Test
+    @DisplayName("top_p 与 stop 会正确出现在请求体里")
+    void samplingParams_reachWire() throws Exception {
+        lastRequestBody = null;
+        registry().chat(LlmRequest.of("hi")
+                .withTemperature(0.2)
+                .withTopP(0.85)
+                .withStop(List.of("\n\n", "###")));
+
+        JsonNode node = JSON.readTree(lastRequestBody);
+        assertEquals(0.2, node.path("temperature").asDouble(), 0.0001);
+        assertEquals(0.85, node.path("top_p").asDouble(), 0.0001);
+        assertEquals(2, node.path("stop").size());
+        assertEquals("\n\n", node.path("stop").path(0).asText());
+        assertEquals("###", node.path("stop").path(1).asText());
+    }
+
+    @Test
     @DisplayName("未知 provider 立刻报错，并列出已配置的厂商")
     void unknownProvider_failsFast() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,

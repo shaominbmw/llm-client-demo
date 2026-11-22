@@ -177,6 +177,12 @@ public final class OpenAiCompatibleClient implements LlmClient {
         if (req.temperature() != null) {
             body.put("temperature", req.temperature());
         }
+        if (req.topP() != null) {
+            body.put("top_p", req.topP());
+        }
+        if (req.stop() != null && !req.stop().isEmpty()) {
+            body.put("stop", req.stop());
+        }
         Integer maxTokens = req.maxTokens() != null ? req.maxTokens() : defaultMaxTokens;
         if (maxTokens != null) {
             body.put("max_tokens", maxTokens);
