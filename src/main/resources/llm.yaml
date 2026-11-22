@@ -6,7 +6,8 @@
 
 llm:
   # 默认用哪家：deepseek / qwen / zhipu / kimi
-  default: qwen
+  # 约定：日常开发和演示统一用 deepseek，除非遇到特定场景（如需要推理模型、做多厂商对比）
+  default: deepseek
 
   providers:
 

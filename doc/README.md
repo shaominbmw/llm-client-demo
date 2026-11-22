@@ -78,6 +78,33 @@ doc/
 
 ---
 
+## 项目约定
+
+### 模型策略
+
+**默认一律用 DeepSeek**，配置在 `llm.yaml` 的 `llm.default: deepseek`。
+
+只有这三种情况才切换：
+
+| 场景 | 用什么 |
+|---|---|
+| 需要推理模型（观察 `reasoning_content`） | `qwen4-max` |
+| 做多厂商兼容性对比 / 验证降级逻辑 | 临时指定 provider |
+| DeepSeek 不可用或限额 | 备选厂商 |
+
+**切换永远不改 Java 代码**——改 `llm.yaml`，或运行时传 provider 参数。
+
+### 运行命令
+
+```bash
+mvn -q compile exec:java          # 必须带 compile
+```
+
+⚠️ 只写 `mvn -q exec:java` 不会刷新 `src/main/resources` 下的配置，
+改了 `llm.yaml` 却不生效，就是这个原因。
+
+---
+
 ## 和语雀的同步
 
 语雀知识库「ai学习」的目录结构与这里一一对应：
