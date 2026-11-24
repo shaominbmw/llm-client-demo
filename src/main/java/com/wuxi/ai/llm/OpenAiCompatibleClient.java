@@ -82,7 +82,7 @@ public final class OpenAiCompatibleClient implements LlmClient {
     // ==================== 流式（SSE） ====================
 
     @Override
-    public LlmResponse stream(LlmRequest req, Consumer<String> onDelta) {
+    public LlmResponse stream(LlmRequest req, Consumer<String> onContent, Consumer<String> onReasoning) {
         String model = resolveModel(req);
         HttpRequest httpReq = buildRequest(toJson(req, model, true));
 
@@ -117,11 +117,17 @@ public final class OpenAiCompatibleClient implements LlmClient {
                     JsonNode node = JSON.readTree(data);
                     JsonNode choice = node.path("choices").path(0);
 
+                    // 推理模型会先吐 reasoning_content（思考过程），再吐 content（正文）
+                    String reasoning = choice.path("delta").path("reasoning_content").asText("");
+                    if (!reasoning.isEmpty() && onReasoning != null) {
+                        onReasoning.accept(reasoning);
+                    }
+
                     String delta = choice.path("delta").path("content").asText("");
                     if (!delta.isEmpty()) {
                         text.append(delta);
-                        if (onDelta != null) {
-                            onDelta.accept(delta);
+                        if (onContent != null) {
+                            onContent.accept(delta);
                         }
                     }
 

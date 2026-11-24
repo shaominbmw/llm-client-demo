@@ -14,12 +14,24 @@ public interface LlmClient {
     LlmResponse chat(LlmRequest request);
 
     /**
-     * 流式拿到回答：模型每吐一个片段，就回调一次 onDelta。
-     * 返回值和 chat() 一样，是聚合后的完整结果（含 token 统计）。
+     * 流式：只要正文。
      *
-     * @param onDelta 每收到一段文本就调用一次，UI 层用它做打字机效果
+     * @param onDelta 每收到一段正文就调用一次
      */
-    LlmResponse stream(LlmRequest request, Consumer<String> onDelta);
+    default LlmResponse stream(LlmRequest request, Consumer<String> onDelta) {
+        return stream(request, onDelta, null);
+    }
+
+    /**
+     * 流式：正文和「思考过程」分开回调。
+     *
+     * 推理模型（如 qwen4-max）会先输出 reasoning_content 再输出正文。
+     * 如果不区分，用户在前几秒只看到空白——因为思考内容被我们丢掉了。
+     *
+     * @param onContent   正文片段（可为 null）
+     * @param onReasoning 思考片段（可为 null；非推理模型不会触发）
+     */
+    LlmResponse stream(LlmRequest request, Consumer<String> onContent, Consumer<String> onReasoning);
 
     /** 厂商名，用于日志与排查 */
     String provider();
