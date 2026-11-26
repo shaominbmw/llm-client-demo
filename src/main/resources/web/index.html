@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设备维护知识助手</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0e131d; color: #d8dee9;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    line-height: 1.7; min-height: 100vh;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header { margin-bottom: 28px; }
+  h1 { font-size: 20px; font-weight: 600; color: #e8f0ff; }
+  .sub { font-size: 13px; color: #6b7a94; margin-top: 6px; }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: #16233a; color: #7aa2d6; border: 1px solid #22334f; margin-right: 6px;
+  }
+
+  .ask-box {
+    background: #151d2b; border: 1px solid #232f45; border-radius: 12px;
+    padding: 14px; margin-bottom: 18px;
+  }
+  textarea {
+    width: 100%; min-height: 76px; resize: vertical; background: transparent;
+    border: none; outline: none; color: #e8eef8; font-size: 15px;
+    font-family: inherit; line-height: 1.6;
+  }
+  textarea::placeholder { color: #4d5a70; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .counter { font-size: 12px; color: #4d5a70; }
+  button.ask {
+    background: #2f6fd0; color: #fff; border: none; border-radius: 8px;
+    padding: 9px 22px; font-size: 14px; cursor: pointer; font-weight: 500;
+  }
+  button.ask:hover { background: #3a7ee0; }
+  button.ask:disabled { background: #2a3a55; color: #6b7a94; cursor: not-allowed; }
+
+  .examples { margin-bottom: 26px; }
+  .examples .label { font-size: 12px; color: #6b7a94; margin-bottom: 8px; }
+  .chip {
+    display: inline-block; font-size: 12.5px; padding: 6px 12px; margin: 0 8px 8px 0;
+    background: #16202f; border: 1px solid #26334a; border-radius: 16px;
+    color: #9fb0c9; cursor: pointer;
+  }
+  .chip:hover { background: #1d2a3d; border-color: #3a4d6e; color: #c8d6ea; }
+
+  .answer {
+    background: #131b28; border: 1px solid #232f45; border-radius: 12px;
+    padding: 20px 22px; margin-bottom: 16px; display: none;
+  }
+  .answer.show { display: block; }
+  .answer h3 { font-size: 13px; color: #6b7a94; font-weight: 500; margin-bottom: 10px; }
+  .answer .body { font-size: 15px; color: #dde6f2; white-space: pre-wrap; }
+  .answer .body .cite { color: #6fa8f5; font-size: 12px; }
+
+  .warn {
+    font-size: 13px; color: #d9a441; background: #2a2213;
+    border: 1px solid #493a18; border-radius: 8px; padding: 10px 14px; margin-top: 12px;
+  }
+
+  .sources { display: none; }
+  .sources.show { display: block; }
+  .sources h3 { font-size: 13px; color: #6b7a94; font-weight: 500; margin-bottom: 10px; }
+  .src {
+    background: #121a26; border: 1px solid #1f2a3d; border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 10px; font-size: 13px;
+  }
+  .src .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .src .name { color: #8ab4f8; font-size: 12.5px; }
+  .src .score { color: #4ade80; font-weight: 600; font-size: 12px; white-space: nowrap; }
+  .src .meta { color: #6b7a94; font-size: 11.5px; margin: 3px 0 6px; }
+  .src .text { color: #a9b6c9; font-size: 12.5px; line-height: 1.6; }
+
+  .stats { font-size: 11.5px; color: #4d5a70; margin-top: 14px; text-align: right; }
+
+  .loading { display: none; align-items: center; gap: 10px; color: #7aa2d6; font-size: 13px; padding: 16px 0; }
+  .loading.show { display: flex; }
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid #23334f;
+    border-top-color: #4a8ae0; border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .err {
+    background: #2a1618; border: 1px solid #4a2226; color: #e88;
+    border-radius: 8px; padding: 12px 14px; font-size: 13px; display: none;
+  }
+  .err.show { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>设备维护知识助手</h1>
+    <div class="sub">
+      <span class="pill">bge-m3 向量检索</span>
+      <span class="pill">DeepSeek 生成</span>
+      <span class="pill">212 个知识片段</span>
+    </div>
+  </header>
+
+  <div class="ask-box">
+    <textarea id="q" placeholder="问点什么，比如：J1轴的最大动作范围是多少？"></textarea>
+    <div class="row">
+      <span class="counter" id="counter">0 字</span>
+      <button class="ask" id="btn">提问</button>
+    </div>
+  </div>
+
+  <div class="examples">
+    <div class="label">试试这些：</div>
+    <div id="chips"></div>
+  </div>
+
+  <div class="loading" id="loading"><span class="spinner"></span><span>正在检索并生成回答…</span></div>
+
+  <div class="err" id="err"></div>
+
+  <div class="answer" id="answer">
+    <h3>回答</h3>
+    <div class="body" id="answerBody"></div>
+    <div class="warn" id="warn" style="display:none"></div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="sources" id="sources">
+    <h3>引用来源</h3>
+    <div id="sourceList"></div>
+  </div>
+</div>
+
+<script>
+const EXAMPLES = [
+  "J1轴的最大动作范围是多少？",
+  "更换润滑脂的周期是多久？",
+  "控制柜安装需要预留多少空间？",
+  "常见故障有哪些？",
+  "安全注意事项有哪些？"
+];
+
+const q = document.getElementById("q");
+const btn = document.getElementById("btn");
+const loading = document.getElementById("loading");
+const errBox = document.getElementById("err");
+const answer = document.getElementById("answer");
+const answerBody = document.getElementById("answerBody");
+const warn = document.getElementById("warn");
+const stats = document.getElementById("stats");
+const sources = document.getElementById("sources");
+const sourceList = document.getElementById("sourceList");
+
+document.getElementById("chips").innerHTML =
+  EXAMPLES.map(t => `<span class="chip">${t}</span>`).join("");
+document.querySelectorAll(".chip").forEach(el =>
+  el.addEventListener("click", () => { q.value = el.textContent; update(); q.focus(); }));
+
+function update() { document.getElementById("counter").textContent = q.value.length + " 字"; }
+q.addEventListener("input", update);
+q.addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ask(); }
+});
+
+btn.addEventListener("click", ask);
+
+function esc(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function ask() {
+  const question = q.value.trim();
+  if (!question) return;
+
+  btn.disabled = true;
+  loading.classList.add("show");
+  errBox.classList.remove("show");
+  answer.classList.remove("show");
+  sources.classList.remove("show");
+
+  const t0 = performance.now();
+  try {
+    const resp = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, topK: 5 })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || ("HTTP " + resp.status));
+
+    answerBody.innerHTML = esc(data.answer).replace(/\[(\d+)\]/g, '<span class="cite">[$1]</span>');
+    answer.classList.add("show");
+
+    if (!data.answered) {
+      warn.style.display = "block";
+      warn.textContent = "⚠ 知识库中没有找到能回答这个问题的内容，请换个问法或确认手册已导入。";
+    } else {
+      warn.style.display = "none";
+    }
+
+    const total = performance.now() - t0;
+    stats.textContent = `总计 ${(total/1000).toFixed(1)}s ｜ 向量化 ${data.embedMs}ms ｜ 检索 ${data.searchMs}ms ｜ 生成 ${data.llmMs}ms ｜ ${data.tokens} tokens`;
+
+    if (data.sources && data.sources.length) {
+      sourceList.innerHTML = data.sources.map((s, i) => `
+        <div class="src">
+          <div class="top">
+            <span class="name">[${i+1}] ${esc(s.doc)}</span>
+            <span class="score">${(s.score*100).toFixed(1)}%</span>
+          </div>
+          <div class="meta">${esc(s.pages)} ｜ ${esc(s.section)}</div>
+          <div class="text">${esc(s.snippet)}</div>
+        </div>`).join("");
+      sources.classList.add("show");
+    }
+  } catch (e) {
+    errBox.textContent = "请求失败：" + e.message;
+    errBox.classList.add("show");
+  } finally {
+    btn.disabled = false;
+    loading.classList.remove("show");
+  }
+}
+</script>
+</body>
+</html>
