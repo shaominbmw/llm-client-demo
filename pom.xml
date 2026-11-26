@@ -14,8 +14,10 @@
         <jackson.version>2.18.2</jackson.version>
         <snakeyaml.version>2.3</snakeyaml.version>
         <junit.version>5.11.4</junit.version>
+        <pdfbox.version>3.0.5</pdfbox.version>
+        <postgresql.version>42.7.9</postgresql.version>
 
-        <!-- 默认运行 Demo；想跑流式版传 -Dexec.mainClass=com.wuxi.ai.llm.DemoStream -->
+        <!-- 默认运行 Demo；想跑别的传 -Dexec.mainClass=... -->
         <exec.mainClass>com.wuxi.ai.llm.Demo</exec.mainClass>
     </properties>
 
@@ -31,6 +33,20 @@
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
             <version>${snakeyaml.version}</version>
+        </dependency>
+
+        <!-- PDF 文本提取 -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
+        </dependency>
+
+        <!-- PostgreSQL 驱动（pgvector 就是一个 PG 扩展，用标准 JDBC 即可） -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
         </dependency>
 
         <dependency>
